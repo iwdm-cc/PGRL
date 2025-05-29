@@ -85,6 +85,10 @@ class FJSP(gym.Env, EzPickle):
         self.schedules_batch[self.batch_idxes, action, 1] = mch_a
         self.schedules_batch[self.batch_idxes, action, 2] = start_time_a
         self.schedules_batch[self.batch_idxes, action, 3] = end_time_a
+        # 加入job
+        self.schedules_batch[self.batch_idxes, action, 4] = jobs
+
+
 
         self.mch_time[self.batch_idxes, mch_a] = end_time_a
         self.job_time[self.batch_idxes, jobs] = end_time_a
@@ -267,7 +271,7 @@ class FJSP(gym.Env, EzPickle):
             End time
         '''
         # schedules_batch shape: (batch_size, num_opes, 4)
-        self.schedules_batch = np.zeros(shape=(self.batch_size, self.number_of_opes, 4))
+        self.schedules_batch = np.zeros(shape=(self.batch_size, self.number_of_opes, 5))
         self.schedules_batch[:, :, 3] = self.LBm.reshape(self.batch_size, -1)
         self.schedules_batch[:, :, 2] = self.schedules_batch[:, :, 3] - \
                                         self.proc_time_min.reshape(self.batch_size, -1)

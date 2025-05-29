@@ -10,6 +10,7 @@ HU_Vdata_name_list = [f'HurinkVdata{idx}.fjs' for idx in range(1, 67)]
 BC_data_path = 'FJSP-benchmarks/Barnes'
 KHB_data_path = 'FJSP-benchmarks/Kacem'
 BR_data_path = 'FJSP-benchmarks/Brandimarete'
+BRCC_data_path = 'FJSP-benchmarks/Brandimaretecc'
 DP_data_path = 'FJSP-benchmarks/DPpaulli'
 HU_Rdata_path = 'FJSP-benchmarks/Hurink_rdata'
 HU_Edata_path = 'FJSP-benchmarks/Hurink_edata'

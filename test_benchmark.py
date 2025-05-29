@@ -1,18 +1,17 @@
 import argparse
+import collections
 
-import numpy as np
+import hvwfg
 import torch.cuda
+from torch import multiprocessing as mp
 
-from policy import Policy
+from FJSP_Env import FJSP
 from mb_agg import *
 from mo_utils import *
+from policy import Policy
 from utils.fjsp_data_utils import *
-from utils.load_data import *
-from FJSP_Env import FJSP
 from utils.instance_hv_ref import *
-import hvwfg
-import collections
-from torch import multiprocessing as mp
+from utils.load_data import *
 
 n_sols = 15
 if n_sols == 15:
@@ -135,6 +134,7 @@ def sovle_instance_set(ins_set_path, ins_name_list, device, print_flag1=True, pr
                 while not res_queue.empty():
                     result = res_queue.get_nowait()
                     ins_res_dict[result.pref.to("cpu")] = result.res
+                    print("get result",result)
                     count += 1
                 if count == PROCESSES_COUNT:
                     break
@@ -192,6 +192,47 @@ def sovle_instance_set(ins_set_path, ins_name_list, device, print_flag1=True, pr
         print(f'test on {ins_set_path} instance set,', 'mean HV Ratio: {}'.format(np.array(res_list).mean()),
               f'mean spend time is {np.array(time_list).mean()}')
         print("="*160)
+    # Print the final results
+    print("Final Results:")
+    for res in res_list:
+        print(res)
+    print("Time List:")
+    for time1 in time_list:
+        print(time1)
+import matplotlib.pyplot as plt
+import matplotlib.patches as mpatches
+
+def draw_gantt_chart(schedules_batch, num_jobs, num_machines):
+    fig, gnt = plt.subplots()
+
+    # 设置 x 轴和 y 轴标签
+    gnt.set_xlabel('Time')
+    gnt.set_ylabel('Machines')
+
+    # 设置 y 轴刻度
+    gnt.set_yticks([i + 1 for i in range(num_machines)])
+    gnt.set_yticklabels([f'Machine {i + 1}' for i in range(num_machines)])
+
+    # 设置网格
+    gnt.grid(True)
+
+    # 不同作业的颜色
+    colors = plt.cm.get_cmap('tab20', num_jobs)
+
+    # 将任务添加到甘特图
+    for job_id in range(len(schedules_batch)):
+        task = schedules_batch[job_id]
+        if task[0] == 1:  # 只绘制已调度的任务
+            start_time, end_time, machine_id = task[2], task[3], int(task[1])
+            gnt.broken_barh([(start_time, end_time - start_time)], (machine_id + 1, 1), facecolors=(colors(int(task[4]))))
+
+    # 创建图例
+    patches = [mpatches.Patch(color=colors(i), label=f'Job {i + 1}') for i in range(num_jobs)]
+    plt.legend(handles=patches, loc='upper right')
+
+    # Save the figure before showing it
+    plt.savefig(f"./3020_{num_jobs}_{num_machines}_{time.time()}.png")
+    plt.show()
 
 def worker_func(worker_id, filepath, input_queue, res_queue, device):
 
@@ -227,6 +268,8 @@ def worker_func(worker_id, filepath, input_queue, res_queue, device):
 
     while True:
         input_data = input_queue.get()
+
+        print("get input data", input_data)
         if input_data is None:
             break
 
@@ -291,17 +334,36 @@ def worker_func(worker_id, filepath, input_queue, res_queue, device):
 
             _, mch_a = pi_mch.squeeze(-1).max(1)
 
+            print("action:", action)
+            print("mch_a:", mch_a)
             adj, fea, reward, done, candidate, mask, job, _, mch_time, job_time, mch_pro_time = env.step(action.cpu().numpy(), mch_a)
             # rewards += reward
             if env.done_batch.all():
-                # plt.savefig("./3020_%s.svg"%i, format='svg',dpi=300, bbox_inches='tight')
-                # plt.show()
+                print("adj:", adj)
+
+                #plt.savefig("./3020_%s.svg"%time.time(), format='svg',dpi=300, bbox_inches='tight')
+                #plt.show()
                 result = np.zeros((3, batch_size))
+                print("scheduling result:", env.schedules_batch[:, :, 3].max(-1))
+                print("machines_batch result:", env.machines_batch)
                 result[0, :] = env.schedules_batch[:, :, 3].max(-1).reshape(1, batch_size)
                 result[1, :] = env.machines_batch.sum(-1).reshape(1, batch_size)
                 result[2, :] = env.machines_batch.max(-1).reshape(1, batch_size)
+
+                # 绘制甘特图
+                schedules = env.schedules_batch[0].tolist()  # Assuming batch size is 1
+                draw_gantt_chart(schedules, num_jobs, num_mas)
+                gantt = env.validate_gantt()
+                if not gantt[0]:
+                    print("Scheduling Error！！！！！！")
+                else:
+
+                    print("Scheduling Success！！！！！！")
                 break
         res_queue.put(ResItem(worker_idx=worker_id, pref=pref.clone(), res=result))
+
+
+
 
 if __name__ == '__main__':
     # pars hyperparameters
@@ -383,17 +445,19 @@ if __name__ == '__main__':
         workers.append(proc)
 
     data_path_list = []
-    data_path_list.append(KHB_data_path)
-    data_path_list.append(BR_data_path)
-    data_path_list.append(BC_data_path)
-    data_path_list.append(DP_data_path)
-    data_path_list.append(HU_Rdata_path)
-    data_path_list.append(HU_Edata_path)
-    data_path_list.append(HU_Vdata_path)
-    data_path_list.append(Fat_data_path)
+    # data_path_list.append(KHB_data_path)
+    data_path_list.append(BRCC_data_path)
+    # data_path_list.append(BC_data_path)
+    # data_path_list.append(DP_data_path)
+    # data_path_list.append(HU_Rdata_path)
+    # data_path_list.append(HU_Edata_path)
+    # data_path_list.append(HU_Vdata_path)
+    # data_path_list.append(Fat_data_path)
 
     for data_path in data_path_list:
+        print(data_path,"instance set")
         data_name_list = [f for f in os.listdir(data_path)]
+
         data_name_list.sort()
         sovle_instance_set(ins_set_path=data_path, ins_name_list=data_name_list,
                            device= configs.device, save_dict=save_res_dict, save_time_dict=save_time_dict)
