@@ -161,10 +161,10 @@ def validate2(dataloader, agent, device, n_sols=15, if_pref=True, pref=None, ):
 
     # ref = np.array([2000, 2000, 2000]) # 6x6
     # ref = np.array([5000, 5000, 5000])  # 15x15
-    #ref = np.array([2500, 2500, 2500])  # 10x10
+    ref = np.array([2500, 2500, 2500], dtype=np.float64)  # 10x10
     # ref = np.array([2000, 2000, 2000])
     # ref = np.array([5000, 5000, 5000])  # 20x20
-    ref = np.array([5000, 5000, 5000], dtype=np.float64)  # 确保使用高精度数据类型 # 10x10
+    #ref = np.array([5000, 5000, 5000], dtype=np.float64)  # 确保使用高精度数据类型 # 10x10
     # ref = np.array([3500, 3500, 3500])
     # ref = np.array([20000, 20000, 20000]) # 15x15 need to improve
     total_sols = None

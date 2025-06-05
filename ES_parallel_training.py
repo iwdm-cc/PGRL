@@ -19,8 +19,8 @@ rng = np.random.default_rng()
 
 import pandas as pd
 
-MAX_BATCH_EPISODES = 10
-MAX_BATCH_STEPS = 30
+MAX_BATCH_EPISODES = 100
+MAX_BATCH_STEPS = 300
 NOISE_STD = 0.01
 LEARNING_RATE = 0.001  # 0.0005 trans to 0.001
 # TODO: PROCESSES_COUNT * ITERS_PER_UPDATE should equals to 100
