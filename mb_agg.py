@@ -10,11 +10,21 @@ def aggr_obs(obs_mb, n_node):
     idx_mb = torch.stack((new_idx_row, new_idx_col))
     # print(idx_mb)
     # print(obs_mb.shape[0])
-    adj_batch = torch.sparse.FloatTensor(indices=idx_mb,
-                                         values=vals,
-                                         size=torch.Size([obs_mb.shape[0] * n_node,
-                                                          obs_mb.shape[0] * n_node]),
-                                         ).to(obs_mb.device)
+    # 原始代码 torch 警告
+    # adj_batch = torch.sparse.FloatTensor(indices=idx_mb,
+    #                                      values=vals,
+    #                                      size=torch.Size([obs_mb.shape[0] * n_node,
+    #                                                       obs_mb.shape[0] * n_node]),
+    #                                      ).to(obs_mb.device)
+    # 更新后的代码
+    adj_batch = torch.sparse_coo_tensor(
+        indices=idx_mb,
+        values=vals,
+        size=torch.Size([obs_mb.shape[0] * n_node,
+                         obs_mb.shape[0] * n_node]),
+        dtype=torch.float32,  # 明确指定数据类型
+        device=obs_mb.device  # 直接指定目标设备
+    )
     return adj_batch
 
 
@@ -41,10 +51,18 @@ def g_pool_cal(graph_pool_type, batch_size, n_nodes, device):
                          device=device,
                          dtype=torch.long)
     idx = torch.stack((idx_0, idx_1))
-    graph_pool = torch.sparse.FloatTensor(idx, elem,
-                                          torch.Size([batch_size[0],
-                                                      n_nodes*batch_size[0]])
-                                          ).to(device)
+    # 原始代码 torch 警告
+    # graph_pool = torch.sparse.FloatTensor(idx, elem,
+    #                                       torch.Size([batch_size[0],
+    #                                                   n_nodes*batch_size[0]])
+    #                                       ).to(device)
+    graph_pool = torch.sparse_coo_tensor(
+        idx,
+        elem,
+        torch.Size([batch_size[0], n_nodes * batch_size[0]]),
+        dtype=torch.float32,
+        device=device
+    )
     '''graph_pools = []
     for i in range(configs.batch_size):
         graph_pools.append(graph_pool)'''

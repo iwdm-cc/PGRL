@@ -1,10 +1,11 @@
+import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from multi_opt_models.graphcnn_congForSJSSP import GraphCNN
 from torch.distributions.categorical import Categorical
-import torch
+
 from Params import configs
-from utils.agent_utils import select_action1,greedy_select_action
+from multi_opt_models.graphcnn_congForSJSSP import GraphCNN
+from utils.agent_utils import select_action1, greedy_select_action
 
 INIT = configs.Init
 
@@ -117,6 +118,8 @@ class Job_Actor(nn.Module):
         # hyper_embd = self.hyper_fc1(pref)
         # hyper_embd = self.hyper_fc2(hyper_embd)
         # mid_embd = self.hyper_fc3(hyper_embd)
+        # 确保pref在正确的设备上
+        pref = pref.to(next(self.parameters()).device)
         mid_embd = self.hyper_fc3(self.hyper_fc2(self.hyper_fc1(pref)))
 
         self.dec_lin1_para  = self.hyper_lin1(mid_embd[:self.embd_dim]).reshape(128, 256)
@@ -296,6 +299,15 @@ class Mch_Actor(nn.Module):
         #self.critic = MLPCritic(3, hidden_dim*2, hidden_dim, 1).to(device)
     # TODO: assign function
     def assign(self, pref):
+        # 确保输入与模型在同一设备上
+        if pref.device != next(self.parameters()).device:
+            pref = pref.to(next(self.parameters()).device)
+
+        # 打印设备信息以帮助调试
+        #print(f"In assign method: 时间"+time.strftime('%Y-%m-%d %H:%M:%S', time.localtime()))
+        # print(f"  pref device: {pref.device}")
+        # print(f"  model device: {next(self.parameters()).device}")
+
         hyper_embd = self.hyper_fc1(pref)
         hyper_embd = self.hyper_fc2(hyper_embd)
         mid_embd = self.hyper_fc3(hyper_embd)

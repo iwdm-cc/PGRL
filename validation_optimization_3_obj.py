@@ -1,14 +1,17 @@
-from mb_agg import *
-from FJSP_Env import FJSP
-from mb_agg import g_pool_cal
+import os
+
+import hvwfg
 import numpy as np
 import torch
-from Params import configs
-import hvwfg
-from policy import Policy
-import os
-from uniform_instance import FJSPDataset
 from torch.utils.data import DataLoader
+
+from FJSP_Env import FJSP
+from Params import configs
+from mb_agg import *
+from mb_agg import g_pool_cal
+from policy import Policy
+from uniform_instance import FJSPDataset
+
 
 def das_dennis_recursion(ref_dirs, ref_dir, n_partitions, beta, depth):
     if depth == len(ref_dir) - 1:
@@ -110,21 +113,58 @@ def validate2(dataloader, agent, device, n_sols=15, if_pref=True, pref=None, ):
     # x_list = torch.linspace(start=0, end=1, steps=n_sols)
     # y_list = torch.linspace(start=1, end=0, steps=n_sols)
     uniform_weights = None
-    if n_sols == 15:
-        uniform_weights = torch.Tensor(das_dennis(4, 3))  # 15    # Systematic approach
-    if n_sols == 105:
-        uniform_weights = torch.Tensor(das_dennis(13,3))  # 105   # 取组合数来着
+    # 为不同n_sols值创建权重
+    if n_sols == 11:
+        # 创建三维目标权重 (11个点)
+        weights = []
+        # 顶点
+        weights.append([1.0, 0.0, 0.0])
+        weights.append([0.0, 1.0, 0.0])
+        weights.append([0.0, 0.0, 1.0])
+
+        # 边中点
+        weights.append([0.5, 0.5, 0.0])
+        weights.append([0.5, 0.0, 0.5])
+        weights.append([0.0, 0.5, 0.5])
+
+        # 内部点
+        weights.append([0.7, 0.15, 0.15])
+        weights.append([0.15, 0.7, 0.15])
+        weights.append([0.15, 0.15, 0.7])
+        weights.append([0.5, 0.3, 0.2])
+        weights.append([0.3, 0.5, 0.2])
+
+        uniform_weights = torch.tensor(weights, dtype=torch.float32)
+
+    elif n_sols == 15:
+        uniform_weights = torch.Tensor(das_dennis(4, 3))  # 15个点
+
+    elif n_sols == 105:
+        uniform_weights = torch.Tensor(das_dennis(13, 3))  # 105个点
+
     elif n_sols == 1035:
-        uniform_weights = torch.Tensor(das_dennis(44,3))   # 1035
+        uniform_weights = torch.Tensor(das_dennis(44, 3))  # 1035个点
+
     elif n_sols == 10011:
-        uniform_weights = torch.Tensor(das_dennis(140,3))   # 10011
+        uniform_weights = torch.Tensor(das_dennis(140, 3))  # 10011个点
+
+    else:
+        # 默认分支：为其他n_sols值创建三维权重
+        print(f"Warning: Unsupported n_sols={n_sols}, creating random weights for 3 objectives")
+        weights = []
+        for i in range(n_sols):
+            # 生成三个随机数并归一化
+            w = np.random.rand(3)
+            w /= w.sum()
+            weights.append(w)
+        uniform_weights = torch.tensor(weights, dtype=torch.float32)
 
     # ref = np.array([2000, 2000, 2000]) # 6x6
     # ref = np.array([5000, 5000, 5000])  # 15x15
-    ref = np.array([2500, 2500, 2500])  # 10x10
+    #ref = np.array([2500, 2500, 2500])  # 10x10
     # ref = np.array([2000, 2000, 2000])
     # ref = np.array([5000, 5000, 5000])  # 20x20
-    # ref = np.array([5000, 5000, 5000])  # 10x10
+    ref = np.array([5000, 5000, 5000], dtype=np.float64)  # 确保使用高精度数据类型 # 10x10
     # ref = np.array([3500, 3500, 3500])
     # ref = np.array([20000, 20000, 20000]) # 15x15 need to improve
     total_sols = None
@@ -153,7 +193,7 @@ def validate2(dataloader, agent, device, n_sols=15, if_pref=True, pref=None, ):
         # temp_sols = total_sols[i*3:(i+1)*3, :].reshape(128, 3)
         temp_sols = total_sols[:, i].reshape(-1, 3)
         temp_hv = hvwfg.wfg(temp_sols.astype(float), ref.astype(float))
-        temp_hv = temp_hv / (ref[0] * ref[1] * ref[2])
+        temp_hv = temp_hv / np.prod(ref, dtype=np.float64)  # 使用 np.prod 并指定高精度数据类型
         hv_list.append(temp_hv)
     hv_ratio = np.array(hv_list).mean()
 
@@ -161,6 +201,12 @@ def validate2(dataloader, agent, device, n_sols=15, if_pref=True, pref=None, ):
 
 if __name__ == "__main__":
     device = torch.device(configs.device)
+    # 如果你有多个GPU，需要调整device设置
+    if torch.cuda.device_count() >= 2:
+        device = torch.device('cuda:1')  # 使用第二块GPU
+    else:
+        device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+    print(device)
     agent = Policy(configs.lr, configs.gamma, configs.k_epochs, configs.eps_clip,
                         num_layers=configs.num_layers,
                         neighbor_pooling_type=configs.neighbor_pooling_type,
@@ -172,25 +218,26 @@ if __name__ == "__main__":
                         num_mlp_layers_critic=configs.num_mlp_layers_critic,
                         hidden_dim_critic=configs.hidden_dim_critic,
                         pref_dim=3,
-                        device=device)
-
-    env = FJSP(configs.n_j, configs.n_m)
+                        device=device
+        , n_ope=configs.n_j * configs.n_m)
+    ope_nums_of_jobs = np.array([configs.n_m for _ in range(configs.n_j)])
+    env = FJSP(configs.n_j, configs.n_m,ope_nums_of_jobs)
 
     filepath = 'saved_network_MOFJSP'
     filepath = os.path.join(filepath, "3_obj")
     # filepath = os.path.join(filepath, '06-02-22-08')
     # filepath = os.path.join(filepath, '_222_43.22564571523531')
-    filepath = os.path.join(filepath, '07-05-23-01')
-    filepath = os.path.join(filepath, '_72_44.33505371542969')
+    filepath = os.path.join(filepath, '10x10')
+    # filepath = os.path.join(filepath, '_72_44.33505371542969')
 
-    job_path = './{}.pth'.format('policy_job')
-    mch_path = './{}.pth'.format('policy_mch')
+    job_path = '{}.pth'.format('policy_job')
+    mch_path = '{}.pth'.format('policy_mch')
 
     job_path = os.path.join(filepath, job_path)
     mch_path = os.path.join(filepath, mch_path)
 
-    agent.policy_job.load_state_dict(torch.load(job_path))
-    agent.policy_mch.load_state_dict(torch.load(mch_path))
+    agent.policy_job.load_state_dict(torch.load(job_path,map_location=torch.device(device)),)
+    agent.policy_mch.load_state_dict(torch.load(mch_path,map_location=torch.device(device)))
 
     agent.policy_job.eval()
     agent.policy_mch.eval()
@@ -205,4 +252,4 @@ if __name__ == "__main__":
     valid_loader = DataLoader(validat_dataset, batch_size=configs.batch_size)
 
     hv_score, score1, score2, score3, sum_score = validate2(valid_loader, agent, device, n_sols=15)
-    print(hv_score)
+    print(hv_score,"hv_score")

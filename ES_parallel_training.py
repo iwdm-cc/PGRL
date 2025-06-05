@@ -13,12 +13,14 @@ from torch.utils.data import DataLoader
 import os
 import matplotlib.pyplot as plt
 
+os.environ['CUDA_LAUNCH_BLOCKING'] = '1'  # 在代码开头添加
+os.environ['TORCH_USE_CUDA_DSA'] = '1'    # 启用设备端断言
 rng = np.random.default_rng()
 
 import pandas as pd
 
-MAX_BATCH_EPISODES = 100
-MAX_BATCH_STEPS = 300
+MAX_BATCH_EPISODES = 10
+MAX_BATCH_STEPS = 30
 NOISE_STD = 0.01
 LEARNING_RATE = 0.001  # 0.0005 trans to 0.001
 # TODO: PROCESSES_COUNT * ITERS_PER_UPDATE should equals to 100
@@ -43,7 +45,16 @@ def evaluate(env, data, agent, g_pool_step, pref, device):
     agent.policy_mch.assign(pref)
     while True:
         adj_temp = torch.from_numpy(adj)
-        env_adj = aggr_obs(adj_temp.to(device).to_sparse(), configs.n_j * configs.n_m)
+        # 1. 先移动到CPU（避免可能的CUDA错误）
+        adj_temp_cpu = adj_temp.cpu()
+
+        # 2. 转换为稀疏格式（在CPU上）
+        adj_temp_sparse = adj_temp_cpu.to_sparse()
+
+        # 3. 移动到GPU
+        adj_temp_sparse_gpu = adj_temp_sparse.to(device)
+
+        env_adj = aggr_obs(adj_temp_sparse_gpu.to(device).to_sparse(), configs.n_j * configs.n_m)
         env_fea = torch.from_numpy(fea).float().to(device)
         env_fea = env_fea.reshape(-1, env_fea.size(-1))
         env_candidate = torch.from_numpy(candidate).long().to(device)
@@ -193,7 +204,15 @@ def worker_func(worker_id, params_queue, rewards_queue,
         # agent.policy_mch.assign(pref)
 
         for _ in range(ITERS_PER_UPDATE):
-            seed = np.random.randint(low=0, high=seed_high)
+            max_safe_seed = 2147483647
+            segment_size = 1000000  # 每个进程的种子区间大小
+            low_bound = worker_id * segment_size
+
+            if low_bound >= max_safe_seed:
+                seed = np.random.randint(0, max_safe_seed)
+            else:
+                high_bound = min((worker_id + 1) * segment_size, max_safe_seed)
+                seed = np.random.randint(low_bound, high_bound)
             np.random.seed(seed)
             actor_job_pos, actor_job_neg, actor_mch_pos, actor_mch_neg = sample_noise(agent, device)
 
@@ -213,7 +232,7 @@ def worker_func(worker_id, params_queue, rewards_queue,
 def main(mp, index=0):
 
 
-    filepath = 'saved_network_MOFJSP'
+    filepath = 'saved_network_MOFJSP_es_parallel_zc_0530'
     TIMESTAMP = time.strftime("%m-%d-%H-%M", time.localtime(time.time()))
     record = 0
 

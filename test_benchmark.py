@@ -234,6 +234,20 @@ def draw_gantt_chart(schedules_batch, num_jobs, num_machines):
     plt.savefig(f"./3020_{num_jobs}_{num_machines}_{time.time()}.png")
     plt.show()
 
+
+def printTime(schedules):
+    # 示例代码（Python）
+    import pandas as pd
+
+    data = schedules  # 您的数据
+    df = pd.DataFrame(data, columns=["工件ID", "机器ID", "开始时间", "结束时间", "工序ID"])
+
+    for machine in sorted(df["机器ID"].unique()):
+        machine_jobs = df[df["机器ID"] == machine].sort_values("开始时间")
+        print(f"机器 {int(machine)} 调度顺序：")
+        for _, row in machine_jobs.iterrows():
+            print(f"  工件 {int(row['工件ID'])} 工序 {int(row['工序ID'])}: {row['开始时间']}→{row['结束时间']}")
+
 def worker_func(worker_id, filepath, input_queue, res_queue, device):
 
     agent = Policy(configs.lr, configs.gamma, configs.k_epochs, configs.eps_clip,
@@ -352,7 +366,9 @@ def worker_func(worker_id, filepath, input_queue, res_queue, device):
 
                 # 绘制甘特图
                 schedules = env.schedules_batch[0].tolist()  # Assuming batch size is 1
+                print('schedules',schedules)
                 draw_gantt_chart(schedules, num_jobs, num_mas)
+                printTime(schedules)
                 gantt = env.validate_gantt()
                 if not gantt[0]:
                     print("Scheduling Error！！！！！！")
