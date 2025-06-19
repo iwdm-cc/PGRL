@@ -8,21 +8,20 @@
 """
 
 import matplotlib.pyplot as plt
+import pandas as pd
+import seaborn as sns
+import os
+from matplotlib.patches import Patch
+from matplotlib.colors import to_rgba
 
 # 设置 matplotlib 中文显示（可选）
 plt.rcParams['font.sans-serif'] = ['SimHei']  # 设置中文字体为黑体
 plt.rcParams['axes.unicode_minus'] = False  # 正常显示负号
 
 # -----------------------------
-# Step 1: 准备三个调度方案的数据
-# 每项数据格式：(作业-工序, 使用机器, 开始时间, 结束时间, 颜色)
+# 全局设置：图片保存路径
 # -----------------------------
-import matplotlib.pyplot as plt
-import pandas as pd
-
-# 设置 matplotlib 中文显示
-plt.rcParams['font.sans-serif'] = ['SimHei']  # 设置中文字体为黑体
-plt.rcParams['axes.unicode_minus'] = False  # 正常显示负号
+save_path = "pic/scheduling_results"  # 修改此处可更改保存路径
 
 # -----------------------------
 # Step 1: 准备三个调度方案的数据
@@ -41,7 +40,6 @@ color_scheme = {
 def get_color(job_id, alpha=1.0):
     base_color = color_scheme.get(job_id, "#9CA3AF")  # 默认灰色
     # 转换为RGBA并设置透明度
-    from matplotlib.colors import to_rgba
     return to_rgba(base_color, alpha)
 
 
@@ -86,8 +84,8 @@ schedule_data = {
 # -----------------------------
 # Step 2: 甘特图绘图函数
 # -----------------------------
-def plot_gantt(data, title):
-    """绘制甘特图"""
+def plot_gantt(data, title, filename):
+    """绘制甘特图并保存为文件"""
     fig, ax = plt.subplots(figsize=(12, 5))
     machines = sorted(set([item[1] for item in data]))
     machine_map = {m: i for i, m in enumerate(machines)}
@@ -110,7 +108,6 @@ def plot_gantt(data, title):
     ax.grid(True, axis='x', linestyle='--', alpha=0.6)
 
     # 添加图例
-    from matplotlib.patches import Patch
     legend_elements = [Patch(facecolor=get_color("J1"), label='作业 J1'),
                        Patch(facecolor=get_color("J2"), label='作业 J2'),
                        Patch(facecolor=get_color("J3"), label='作业 J3')]
@@ -118,62 +115,81 @@ def plot_gantt(data, title):
 
     # 微调布局
     plt.tight_layout()
-    plt.show()
+
+    # 保存图像
+    full_path = os.path.join(save_path, filename)
+    plt.savefig(full_path, dpi=300)
+    plt.close()  # 关闭图形，避免内存泄漏
+    print(f"已保存甘特图: {full_path}")
 
 
 # -----------------------------
-# Step 3: 绘制所有方案的甘特图
+# Step 3: 主程序
 # -----------------------------
-for scheme, data in schedule_data.items():
-    plot_gantt(data, scheme)
+if __name__ == "__main__":
+    # 确保保存目录存在
+    if not os.path.exists(save_path):
+        os.makedirs(save_path)
+        print(f"创建保存目录: {save_path}")
 
-# -----------------------------
-# Step 4: 构建三目标性能数据并绘制 Pareto 图
-# -----------------------------
-pareto_df = pd.DataFrame({
-    "方案": ["MinCmax", "MinLoad", "MinSwitch"],
-    "完工时间": [10, 11, 16],  # Cmax
-    "总负载": [8, 8, 7],  # 所有机器加工时间总和
-    "切换成本": [4, 3, 4],  # 假设切换一次成本为1
-})
+    # -----------------------------
+    # 绘制所有方案的甘特图并保存
+    # -----------------------------
+    for scheme, data in schedule_data.items():
+        filename = f"gantt_{scheme}.png"
+        plot_gantt(data, scheme, filename)
 
-fig = plt.figure(figsize=(8, 6))
-ax = fig.add_subplot(111, projection='3d')
-ax.scatter(pareto_df["完工时间"], pareto_df["总负载"], pareto_df["切换成本"], c=['r', 'g', 'b'], s=100)
+    # -----------------------------
+    # 构建三目标性能数据并绘制 Pareto 图
+    # -----------------------------
+    pareto_df = pd.DataFrame({
+        "方案": ["MinCmax", "MinLoad", "MinSwitch"],
+        "完工时间": [10, 11, 16],  # Cmax
+        "总负载": [8, 8, 7],  # 所有机器加工时间总和
+        "切换成本": [4, 3, 4],  # 假设切换一次成本为1
+    })
 
-# 添加标签
-for i, row in pareto_df.iterrows():
-    ax.text(row["完工时间"], row["总负载"], row["切换成本"], row["方案"], fontsize=10)
+    # 创建三维Pareto图
+    fig = plt.figure(figsize=(8, 6))
+    ax = fig.add_subplot(111, projection='3d')
+    ax.scatter(pareto_df["完工时间"], pareto_df["总负载"], pareto_df["切换成本"], c=['r', 'g', 'b'], s=100)
 
-# 设置坐标轴与标题
-ax.set_xlabel("完工时间 (Cmax)")
-ax.set_ylabel("总负载")
-ax.set_zlabel("切换成本")
-ax.set_title("多目标调度的 Pareto 前沿图")
-plt.tight_layout()
-plt.show()
+    # 添加标签
+    for i, row in pareto_df.iterrows():
+        ax.text(row["完工时间"], row["总负载"], row["切换成本"], row["方案"], fontsize=10)
 
-import seaborn as sns
-import matplotlib.pyplot as plt
-import pandas as pd
+    # 设置坐标轴与标题
+    ax.set_xlabel("完工时间 (Cmax)")
+    ax.set_ylabel("总负载")
+    ax.set_zlabel("切换成本")
+    ax.set_title("多目标调度的 Pareto 前沿图")
+    plt.tight_layout()
 
-# 模拟三方案的三目标数据（你可扩展更多行）
-df = pd.DataFrame({
-    "方案": ["MinCmax", "MinLoad", "MinSwitch"],
-    "完工时间": [10, 11, 16],  # Cmax
-    "总负载": [8, 8, 7],  # 所有机器加工时间总和
-    "切换成本": [4, 3, 4],  # 假设切换一次成本为1
-})
+    # 保存Pareto图
+    pareto_filename = os.path.join(save_path, "pareto_front.png")
+    plt.savefig(pareto_filename, dpi=300)
+    plt.close()
+    print(f"已保存Pareto图: {pareto_filename}")
 
-# 提取数值指标用于相关性计算
-metrics = df[["完工时间", "总负载", "切换成本"]]
+    # -----------------------------
+    # 绘制三目标冲突关系热力图
+    # -----------------------------
+    # 提取数值指标用于相关性计算
+    metrics = pareto_df[["完工时间", "总负载", "切换成本"]]
 
-# 计算皮尔逊相关系数矩阵
-corr_matrix = metrics.corr(method="pearson")
+    # 计算皮尔逊相关系数矩阵
+    corr_matrix = metrics.corr(method="pearson")
 
-# 画出热力图
-plt.figure(figsize=(6, 5))
-sns.heatmap(corr_matrix, annot=True, cmap="coolwarm", fmt=".2f", square=True, cbar=True)
-plt.title("三目标冲突关系热力图（相关系数）")
-plt.tight_layout()
-plt.show()
+    # 画出热力图
+    plt.figure(figsize=(6, 5))
+    sns.heatmap(corr_matrix, annot=True, cmap="coolwarm", fmt=".2f", square=True, cbar=True)
+    plt.title("三目标冲突关系热力图（相关系数）")
+    plt.tight_layout()
+
+    # 保存热力图
+    heatmap_filename = os.path.join(save_path, "correlation_heatmap.png")
+    plt.savefig(heatmap_filename, dpi=300)
+    plt.close()
+    print(f"已保存热力图: {heatmap_filename}")
+
+    print("\n所有图片已成功保存至:", os.path.abspath(save_path))
